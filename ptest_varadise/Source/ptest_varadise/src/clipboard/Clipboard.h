@@ -10,18 +10,21 @@ class UTexture2D;
 class PTEST_VARADISE_API Win32_Clipboard
 {
 public:
-	void copy(const utpImage& image);
+	void copy(const utpImage& image, const Rect2i& region);
 
 private:
-	bool createBitmapFormat(BITMAPV5HEADER* out, const utpImage& image);
+	bool createBitmapFormat(BITMAPV5HEADER* out, const utpImage& image, const Rect2i& region);
 };
 
 class PTEST_VARADISE_API OsUtil
 {
 public:
-	static void CopyImageToClipboard(const utpImage& image);
+	static void CopyImageToClipboard(const utpImage& image, const Rect2i& region);
 	static void CopyImageToClipboard(const int32 InSizeX, const int32 InSizeY, const TArray<FColor>& InImageData);
 	static void CopyImageToClipboard(UTexture2D* InImageTexture);
+
+	static void CopyImageToClipboard(const int32 InSizeX, const int32 InSizeY, const TArray<FColor>& InImageData, const Rect2i& region);
+	static void CopyImageToClipboard(UTexture2D* InImageTexture, const Rect2i& region);
 };
 
 inline void utpImage_createTo(utpImage* out, UTexture2D* InImageTexture);

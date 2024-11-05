@@ -1,7 +1,7 @@
 #include "Clipboard.h"
 
 void 
-Win32_Clipboard::copy(const utpImage& image)
+Win32_Clipboard::copy(const utpImage& image, const Rect2i& region)
 {
 	if (!image.isValid())
 		return;
@@ -9,7 +9,7 @@ Win32_Clipboard::copy(const utpImage& image)
 	Win32_ClipboardScope	clipboardScope;
 	Win32_MemoryScope		memScope {sizeof(BITMAPV5HEADER) + image.bytesPerRow() * image.height(), false};		// pad row size to a multiple of 4 bytes
 
-	bool isSuccess = createBitmapFormat(memScope.lock<BITMAPV5HEADER>(), image);
+	bool isSuccess = createBitmapFormat(memScope.lock<BITMAPV5HEADER>(), image, region);
 	memScope.setAutoFree(!isSuccess);
 
 	EmptyClipboard();
@@ -37,7 +37,7 @@ Win32_Clipboard::copy(const utpImage& image)
 }
 
 bool 
-Win32_Clipboard::createBitmapFormat(BITMAPV5HEADER* out, const utpImage& image)
+Win32_Clipboard::createBitmapFormat(BITMAPV5HEADER* out, const utpImage& image, const Rect2i& region)
 {
 	using u8	= uint8;
 	using u32	= uint32;
@@ -47,8 +47,13 @@ Win32_Clipboard::createBitmapFormat(BITMAPV5HEADER* out, const utpImage& image)
 	auto width	= image.width();
 	auto height = image.height();
 
-	if (width <= 0 || height <= 0)
+	bool isInBoundary = (region.x + region.w <= image.width()) && (region.y + region.h <= image.height());
+	
+	if (!isInBoundary && image.isValid())
+	{
+		log("clipboard failed, out of boundary");
 		return false;
+	}
 
 	if (image.format() != ColorType::RGBA)
 	{
@@ -73,16 +78,17 @@ Win32_Clipboard::createBitmapFormat(BITMAPV5HEADER* out, const utpImage& image)
 
 	auto padding		= 0;	// pad row size to a multiple of 4 bytes
 	auto byteSize		= ColorTypeUtil::getByteSize(image.format());
-	auto bytesPerRow	= width * byteSize + padding;
+	auto srcBytesPerRow	= width * byteSize + padding;
+	auto dstBytesPerRow	= region.w * byteSize + padding;
 
 	auto& o = *out;
 	o.bV5Size			= sizeof(BITMAPV5HEADER);
-	o.bV5Width			= width;
-	o.bV5Height			= height;
+	o.bV5Width			= region.w;
+	o.bV5Height			= region.h;
 	o.bV5Planes			= 1;
 	o.bV5BitCount		= static_cast<WORD>(byteSize * 8);
 	o.bV5Compression	= BI_RGB;
-	o.bV5SizeImage		= bytesPerRow * height;
+	o.bV5SizeImage		= region.h * dstBytesPerRow;
 
 	// only works for BI_BITFIELDS
 	/*o.bV5RedMask		= rMask;
@@ -94,69 +100,86 @@ Win32_Clipboard::createBitmapFormat(BITMAPV5HEADER* out, const utpImage& image)
 	o.bV5Intent			= LCS_GM_GRAPHICS;
 	o.bV5ClrUsed		= 0;
 
-	const u8*	src = (image.data());
-	u8*			dst = ((reinterpret_cast<u8*>(&o) + o.bV5Size) + (height - 1) * bytesPerRow);
-
-	for (int y = height - 1; y >= 0; --y)
+	// copy src data to bitmap struct
 	{
-		auto* srcRow = reinterpret_cast<const u32*>(src);
-		auto* dstRow = reinterpret_cast<u32*>(dst);
+		const u8*	src = (image.data() + region.x * byteSize + region.y * srcBytesPerRow);
+		u8*			dst = ((reinterpret_cast<u8*>(&o) + o.bV5Size) + (region.h - 1) * dstBytesPerRow);
 
-		for (int x = 0; x < width; ++x)
+		for (int y = region.h - 1; y >= 0; --y)
 		{
-			// pre mulitply alpha
-			u32 a = ((*srcRow & aMask) >> aShift);
+			auto* srcRow = reinterpret_cast<const u32*>(src);
+			auto* dstRow = reinterpret_cast<u32*>(dst);
 
-			u32 r = ((*srcRow & rMask) >> rShift) * a / 255;
-			u32 g = ((*srcRow & gMask) >> gShift) * a / 255;
-			u32 b = ((*srcRow & bMask) >> bShift) * a / 255;
+			for (int x = 0; x < region.w; ++x)
+			{
+				// pre mulitply alpha
+				u32 a = ((*srcRow & aMask) >> aShift);
 
-			#if 0
-			#if UTP_CPU_ENDIAN_LITTLE
-			*dstRow = (b << 0) | (g << 8) | (r << 16) | (a << 24);
-			#else
-			*dstRow = (r << 0) | (g << 8) | (b << 16) | (a << 24);
-			#endif // RDS_CPU_ENDIAN_LITTLE
-			#else
-			*dstRow = (r << 0) | (g << 8) | (b << 16) | (a << 24);		// since FColor is not raw data
-			#endif // 0
+				u32 r = ((*srcRow & rMask) >> rShift) * a / 255;
+				u32 g = ((*srcRow & gMask) >> gShift) * a / 255;
+				u32 b = ((*srcRow & bMask) >> bShift) * a / 255;
 
-			srcRow++;
-			dstRow++;
+				#if 0
+				#if UTP_CPU_ENDIAN_LITTLE
+				*dstRow = (b << 0) | (g << 8) | (r << 16) | (a << 24);
+				#else
+				*dstRow = (r << 0) | (g << 8) | (b << 16) | (a << 24);
+				#endif // RDS_CPU_ENDIAN_LITTLE
+				#else
+				*dstRow = (r << 0) | (g << 8) | (b << 16) | (a << 24);		// since FColor is not raw data
+				#endif // 0
+
+				srcRow++;
+				dstRow++;
+			}
+
+			src += srcBytesPerRow;
+			dst -= dstBytesPerRow;
 		}
-
-		src += bytesPerRow;
-		dst -= bytesPerRow;
 	}
 
 	return true;
 }
 
 void 
-OsUtil::CopyImageToClipboard(const utpImage& image)
+OsUtil::CopyImageToClipboard(const utpImage& image, const Rect2i& region)
 {
 	Clipboard clipboard;
-	clipboard.copy(image);
+	clipboard.copy(image, region);
 }
 
 void 
 OsUtil::CopyImageToClipboard(const int32 InSizeX, const int32 InSizeY, const TArray<FColor>& InImageData)
 {
-	utpImage image;
-	image.create(InSizeX, InSizeY, InImageData);
-	CopyImageToClipboard(image);
+	Rect2i region {0, 0, InSizeX, InSizeY};
+	CopyImageToClipboard(InSizeX, InSizeY, InImageData, region);
 }
 
 void 
 OsUtil::CopyImageToClipboard(UTexture2D* InImageTexture)
+{
+	Rect2i region {0, 0, InImageTexture->GetSizeX(), InImageTexture->GetSizeY()};
+	CopyImageToClipboard(InImageTexture, region);
+}
+
+void 
+OsUtil::CopyImageToClipboard(const int32 InSizeX, const int32 InSizeY, const TArray<FColor>& InImageData, const Rect2i& region)
+{
+	utpImage image;
+	image.create(InSizeX, InSizeY, InImageData);
+	CopyImageToClipboard(image, region);
+}
+
+void 
+OsUtil::CopyImageToClipboard(UTexture2D* InImageTexture, const Rect2i& region)
 {
 	if (!InImageTexture)
 		return;
 
 	utpImage image;
 	utpImage_createTo(&image, InImageTexture);
-	
-	CopyImageToClipboard(image);
+
+	CopyImageToClipboard(image, region);
 }
 
 void 
