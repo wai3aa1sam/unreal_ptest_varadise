@@ -13,35 +13,32 @@ UClipboardTestUiWdg::NativeOnInitialized()
 {
 	Super::NativeOnInitialized();
 
-	btnCopyImage_0->OnPressed.AddDynamic(this, &ThisClass::OnButtonPressed);
-	btnCopyImage_1->OnPressed.AddDynamic(this, &ThisClass::OnButtonPressed);
-	btnCopyImage_2->OnPressed.AddDynamic(this, &ThisClass::OnButtonPressed);
-	btnCopyImage_3->OnPressed.AddDynamic(this, &ThisClass::OnButtonPressed);
-
-	
+	auto children = cpnlImages->GetAllChildren();
+	for (auto* e : children)
+	{
+		auto* btn = Cast<UButton>(e);
+		if (btn)
+			btn->OnPressed.AddDynamic(this, &ThisClass::OnButtonPressed);
+	}
 }
-
 
 void 
 UClipboardTestUiWdg::NativeTick(const FGeometry& MyGeometry, float InDeltaTime) 
 {
 	Super::NativeTick(MyGeometry, InDeltaTime);
 
-	_Count++;
-
-	//FString str = ursFormat("TextBlock {}", _Count);
-	//MyTextBlock->SetText(FText::FromString(str));
 }
 
 void
 UClipboardTestUiWdg::OnButtonPressed() 
 {
-	FSlateApplication::Get().GetUserFocusedWidget(0);
-
-	UButton* btn = btnCopyImage_0;
+	UButton* btn = Cast<UButton>(getFocusedImageButton());
 	
 	if (!btn)
+	{
+		log("no button found");
 		return;
+	}
 
 	auto* tex = Cast<UTexture2D>(btn->WidgetStyle.Normal.GetResourceObject());
 	if (!tex)
@@ -53,25 +50,24 @@ UClipboardTestUiWdg::OnButtonPressed()
 	OsUtil::CopyImageToClipboard(tex);
 }
 
-
-UFUNCTION(BlueprintCallable)
-static UWidget* GetFocusedUMGWidget()
+UButton* 
+UClipboardTestUiWdg::getFocusedImageButton()
 {
-	TSharedPtr<SWidget> FocusedSlateWidget = FSlateApplication::Get().GetUserFocusedWidget(0);
-	if (!FocusedSlateWidget.IsValid())
+	/*TSharedPtr<SWidget> FocusedSlateWidget = FSlateApplication::Get().GetUserFocusedWidget(0);
+	if (!cpnlImages || !FocusedSlateWidget.IsValid())
 	{
-		UE_LOG(LogTemp, Warning, TEXT("No focused Slate widget found"));
+		log("No focused Slate widget found");
 		return nullptr;
-	}
-	for (TObjectIterator<UWidget> Itr; Itr; ++Itr)
+	}*/
+
+	auto children = cpnlImages->GetAllChildren();
+	for (UWidget* e : children)
 	{
-		UWidget* CandidateUMGWidget = *Itr;
-		if (CandidateUMGWidget->GetCachedWidget() == FocusedSlateWidget)
-		{
-			UE_LOG(LogTemp, Warning, TEXT("Focused UMG widget found: %s"), *CandidateUMGWidget->GetName());
-			return CandidateUMGWidget;
-		}
+		auto* btn = Cast<UButton>(e);
+		if (btn && btn->IsPressed())
+			return btn;
 	}
-	UE_LOG(LogTemp, Warning, TEXT("No focused UMG widget found"));
+
 	return nullptr;
 }
+

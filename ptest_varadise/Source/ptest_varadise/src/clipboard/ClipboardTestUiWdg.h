@@ -4,6 +4,7 @@
 #include <Components/Button.h>
 #include <Components/TextBlock.h>
 #include <Components/ListView.h>
+#include <Components/CanvasPanel.h>
 
 #include "ClipboardTestUiWdg.generated.h"
 
@@ -12,10 +13,8 @@ class PTEST_VARADISE_API UClipboardTestUiWdg : public UUserWidget
 {
 	GENERATED_BODY()
 public:
-	UPROPERTY(EditAnywhere, Transient, meta=(BindWidget)) TObjectPtr<UButton> btnCopyImage_0	= nullptr;
-	UPROPERTY(EditAnywhere, Transient, meta=(BindWidget)) TObjectPtr<UButton> btnCopyImage_1	= nullptr;
-	UPROPERTY(EditAnywhere, Transient, meta=(BindWidget)) TObjectPtr<UButton> btnCopyImage_2	= nullptr;
-	UPROPERTY(EditAnywhere, Transient, meta=(BindWidget)) TObjectPtr<UButton> btnCopyImage_3	= nullptr;
+	UPROPERTY(EditAnywhere, Transient, meta=(BindWidget))	TObjectPtr<UCanvasPanel>		cpnlImages = nullptr;
+	UPROPERTY(EditAnywhere, Transient)						TArray<TObjectPtr<UButton> >	btnCopyImages;
 
 public:
 	UClipboardTestUiWdg(const FObjectInitializer& ObjectInitializer);
@@ -25,5 +24,6 @@ public:
 
 	UFUNCTION() void OnButtonPressed();
 
-	int _Count = 0;
+private:
+	UButton* getFocusedImageButton();
 };

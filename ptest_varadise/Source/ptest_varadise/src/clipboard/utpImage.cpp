@@ -20,7 +20,7 @@ utpImage::create(int width, int height, const uint8* data, size_t n, ColorType f
 {
 	create(width, height, format);
 	
-	_data.SetNum(n);
+	resizeBuffer(n);
 	::memcpy(_data.GetData(), data, n);
 }
 
@@ -30,7 +30,7 @@ utpImage::create(int width, int height, ColorType format)
 	_width	= width;
 	_height = height;
 	_format = format;
-	_data.SetNum(width * height * ColorTypeUtil::getByteSize(format));
+	resizeBuffer(width * height * ColorTypeUtil::getByteSize(format));
 }
 
 void 
@@ -43,7 +43,13 @@ void
 utpImage::create(int width, int height, const TArray<FColor>& data)
 {
 	create(width, height, reinterpret_cast<const uint8*>(data.GetData()), data.Num() * sizeof(FColor), ColorType::RGBA);
+}
 
+void 
+utpImage::resizeBuffer(size_t nBytes)
+{
+	_data.Empty();
+	_data.SetNum(nBytes);
 }
 
 bool 
@@ -72,6 +78,35 @@ utpImage::serializeTo_Png(TArray<uint8>& data, ColorType format) const
 
 		STBIW_FREE(png);
 	}
+	
+	TArray<uint8> a;
+	a.SetNum(width * height() * pixelByteSize);
+
+	auto* src		= reinterpret_cast<uint32*>(a.GetData());
+	const auto* p	= reinterpret_cast<const FColor*>(_data.GetData());
+
+	{
+		FStringFormatOrderedArguments Args;
+		Args.Add(p->R);
+		Args.Add(p->G);
+		Args.Add(p->B);
+		Args.Add(p->A);
+		FString str = FString::Format(TEXT("RGBA: {0} {1} {2} {3}"), Args);
+		UE_LOG(LogTemp, Warning, TEXT("%s"), *str);
+	}
+
+	for (size_t i = 0; i < width * height(); i++)
+	{
+		//e = FColor::Red;
+		*src = (*p).ToPackedBGRA();
+		//*src = FColor::Red.ToPackedRGBA();
+		
+		src++;
+		++p;
+	}
+
+	const char* filename = "W:/game_develop/repo/unreal/programming_test/unreal_ptest_varadise/ptest_varadise/out.png";
+	stbi_write_png(filename, width, height(), pixelByteSize, reinterpret_cast<const void*>(a.GetData()), strideInBytes);
 
 	return true;
 }

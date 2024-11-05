@@ -159,10 +159,37 @@ OsUtil::CopyImageToClipboard(UTexture2D* InImageTexture)
 	CopyImageToClipboard(image);
 }
 
+void 
+utpImage_createTo(utpImage* out, UTexture2D* InImageTexture)
+{
+	check(out && InImageTexture);
+
+	auto width		= InImageTexture->GetSizeX();
+	auto height		= InImageTexture->GetSizeY();
+
+	utpImage tmp;
+	tmp.create(width, height, ColorType::RGBA);
+
+	if (!InImageTexture->GetPlatformData()->Mips.IsEmpty())
+	{
+		auto& bulkData = InImageTexture->GetPlatformData()->Mips[0].BulkData;
+
+		tmp.resizeBuffer(bulkData.GetBulkDataSize());
+		void* buf = tmp.data();
+		bulkData.GetCopy(&buf);
+	}
+
+	*out = std::move(tmp);
+}
+
+
+#if 0
+
+#undef UpdateResource
 class ReadTextureScope
 {
 public:
-	ReadTextureScope(FColor* dst, UTexture2D* tex, int mipLevel = 0) 
+	ReadTextureScope(utpImage& dst, UTexture2D* tex, int mipLevel = 0) 
 	{ 
 		if (!tex)
 			return;
@@ -174,7 +201,9 @@ public:
 			return;
 		}
 
-		_tex = tex;
+		_tex		= tex;
+		_mipLevel	= mipLevel;
+
 		_copyTo(dst);
 	}
 
@@ -182,10 +211,11 @@ public:
 	{
 		if (_tex && mipmap().BulkData.IsLocked())
 		{
-			mipmap().BulkData.Unlock();
+			/*mipmap().BulkData.Unlock();
 			_tex->CompressionSettings	= _oldCompressionSettings;
 			_tex->MipGenSettings		= _oldMipGenSettings;
 			_tex->SRGB 					= _oldSRGB;
+			_tex->UpdateResource();*/
 
 			_tex = nullptr;
 		}
@@ -194,7 +224,7 @@ public:
 	//template<class T> T getReadData() { return StaticCast<T>(_hnd->LockReadOnly()); }
 
 private:
-	void _copyTo(FColor* dst)
+	void _copyTo(utpImage& dst)
 	{
 		/*
 		* reference:
@@ -205,11 +235,13 @@ private:
 		_oldMipGenSettings		= _tex->MipGenSettings;
 		_oldSRGB				= _tex->SRGB;
 
-		#undef UpdateResource
-		_tex->UpdateResource();
+		/*_tex->CompressionSettings		= TextureCompressionSettings::TC_VectorDisplacementmap;
+		_tex->MipGenSettings			= TextureMipGenSettings::TMGS_NoMipmaps;
+		_tex->SRGB						= false;
+		_tex->UpdateResource();*/
 
-		auto& bulkData = _tex->GetPlatformData()->Mips[_mipLevel].BulkData;
-		auto* formatedImageData = StaticCast<const FColor*>(bulkData.LockReadOnly()); // lock.getReadData<const FColor*>();
+		#if 0
+		const FColor* formatedImageData = StaticCast<const FColor*>(mipmap().BulkData.LockReadOnly()); // lock.getReadData<const FColor*>();
 		if (!formatedImageData)
 		{
 			log("utpImage_createTo() no bulkData");
@@ -231,6 +263,19 @@ private:
 		#else
 		memcpy(dst, formatedImageData, width * height * sizeof(FColor));
 		#endif // 0
+
+		#else
+
+		void* buf = nullptr;
+		mipmap().BulkData.GetCopy(&buf);
+		if (buf)
+		{
+			memcpy(dst.data(), buf, mipmap().BulkData.GetBulkDataSize());
+		}
+
+		#endif // 0
+
+
 	}
 
 	FTexture2DMipMap& mipmap() { return _tex->GetPlatformData()->Mips[_mipLevel]; }
@@ -242,24 +287,6 @@ private:
 	TextureCompressionSettings	_oldCompressionSettings; 
 	TextureMipGenSettings		_oldMipGenSettings; 
 	bool						_oldSRGB;
-
 };
 
-void 
-utpImage_createTo(utpImage* out, UTexture2D* InImageTexture)
-{
-	check(out && InImageTexture);
-
-	auto width		= InImageTexture->GetSizeX();
-	auto height		= InImageTexture->GetSizeY();
-
-	utpImage tmp;
-	tmp.create(width, height, ColorType::RGBA);
-
-	{
-		FColor* dst = reinterpret_cast<FColor*>(tmp.data());
-		ReadTextureScope lock{dst, InImageTexture};
-	}
-
-	*out = std::move(tmp);
-}
+#endif // 0

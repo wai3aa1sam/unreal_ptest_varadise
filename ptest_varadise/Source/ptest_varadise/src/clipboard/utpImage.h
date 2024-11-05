@@ -25,6 +25,8 @@ public:
 
 	bool serializeTo_Png(TArray<uint8>& data, ColorType format) const;
 
+	void resizeBuffer(size_t nBytes);
+
 public:
 	int				width()			const { return _width; }
 	int				height()		const { return _height; }

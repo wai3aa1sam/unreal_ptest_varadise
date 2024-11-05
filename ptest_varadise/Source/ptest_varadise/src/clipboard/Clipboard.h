@@ -35,7 +35,7 @@ public:
 		_isValidClipboard = OpenClipboard(win);
 		if (!_isValidClipboard) 
 		{
-			log("error");
+			log("OpenClipboard error");
 		}
 	}
 	~Win32_ClipboardScope()
